@@ -1,6 +1,9 @@
-import matplotlib.pyplot as plt
-import seaborn as sns
 import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+from statsmodels.tools.tools import add_constant
 from typing import Literal
 
 ColunasDataset = Literal[
@@ -83,3 +86,60 @@ class EstatisticasDescritivas:
         
         # plt.show() libera a figura e entrega para a interface
         plt.show()
+
+
+class DiagnosticoMulticolinearidade:
+    """
+    Classe para diagnóstico visual e quantitativo de multicolinearidade.
+    Ideal para inspeção antes de modelagens lineares.
+    """
+    
+    def __init__(self, df: pd.DataFrame, features: list):
+        self.df = df[features].dropna() # Cópia limpa para diagnóstico
+        self.features = features
+
+    def plotar_matriz_correlacao(self, titulo: str = 'Correlação entre Features') -> None:
+        """Renderiza o heatmap de correlação de Pearson de forma segura."""
+        fig, ax = plt.subplots(figsize=(13, 13))
+        
+        # Calcula correlação apenas das features numéricas
+        corr_matrix = self.df.corr()
+        
+        # Máscara para esconder a diagonal superior (redundante)
+        mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+        
+        sns.heatmap(
+            corr_matrix, 
+            mask=mask,
+            annot=True, 
+            fmt=".1f", 
+            cmap='coolwarm', 
+            vmin=-1, 
+            vmax=1,
+            cbar_kws={"shrink": .8},
+            ax=ax
+        )
+        ax.set_title(titulo, pad=20, fontsize=14)
+        #plt.tight_layout()
+
+    def calcular_vif(self) -> pd.DataFrame:
+        """
+        Calcula o Variance Inflation Factor (VIF).
+        Matematicamente: VIF_i = 1 / (1 - R_i^2).
+        Adiciona a constante obrigatória para evitar R^2 enviesado na origem.
+        """
+        # Adiciona intercepto para o cálculo correto via OLS interno do statsmodels
+        X_const = add_constant(self.df)
+        
+        vif_data = pd.DataFrame()
+        vif_data["Feature"] = X_const.columns
+        # List comprehension é ok aqui, mas array do numpy é repassado ao backend do C
+        vif_data["VIF"] = [
+            variance_inflation_factor(X_const.values, i) 
+            for i in range(X_const.shape[1])
+        ]
+        
+        # Remove a constante do output final, pois ela não é uma feature do domínio
+        vif_data = vif_data[vif_data["Feature"] != "const"]
+        
+        return vif_data.round(2).sort_values(by="VIF", ascending=False).reset_index(drop=True)
