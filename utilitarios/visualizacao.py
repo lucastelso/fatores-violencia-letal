@@ -98,7 +98,7 @@ class DiagnosticoMulticolinearidade:
         self.df = df[features].dropna() # Cópia limpa para diagnóstico
         self.features = features
 
-    def plotar_matriz_correlacao(self, titulo: str = 'Correlação entre Features') -> None:
+    def plotar_matriz_correlacao(self, decimais:int, titulo: str = 'Correlação entre Features') -> None:
         """Renderiza o heatmap de correlação de Pearson de forma segura."""
         fig, ax = plt.subplots(figsize=(13, 13))
         
@@ -112,7 +112,7 @@ class DiagnosticoMulticolinearidade:
             corr_matrix, 
             mask=mask,
             annot=True, 
-            fmt=".1f", 
+            fmt=f".{decimais}f", 
             cmap='coolwarm', 
             vmin=-1, 
             vmax=1,
