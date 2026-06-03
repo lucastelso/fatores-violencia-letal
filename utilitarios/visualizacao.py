@@ -1,10 +1,15 @@
+import math
 import pandas as pd
 import numpy as np
+
+from typing import Literal, Optional, List
+
 import seaborn as sns
 import matplotlib.pyplot as plt
+
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from statsmodels.tools.tools import add_constant
-from typing import Literal
+
 
 ColunasDataset = Literal[
     'cod','regiao','uf', 'municipio', 'pop_total_residente', 'pop_rural_residente',
@@ -143,3 +148,126 @@ class DiagnosticoMulticolinearidade:
         vif_data = vif_data[vif_data["Feature"] != "const"]
         
         return vif_data.round(2).sort_values(by="VIF", ascending=False).reset_index(drop=True)
+    
+
+
+class VisualizadorExploratorio:
+    """
+    Classe dedicada à Análise Exploratória de Dados (EDA) modular.
+    Gerencia automaticamente a alocação de grids e o ciclo de vida das figuras do Matplotlib.
+    """
+    
+    def __init__(self, df: pd.DataFrame):
+        self.df = df
+        
+    def _calcular_geometria_grid(self, num_plots: int, max_colunas: int = 3) -> tuple:
+        """
+        Calcula as dimensões ideais da matriz de subplots usando teoria dos conjuntos e função teto.
+        Retorna (linhas, colunas).
+        """
+        colunas = min(num_plots, max_colunas)
+        linhas = math.ceil(num_plots / colunas)
+        return linhas, colunas
+
+    def _remover_eixos_vazios(self, axes: iter, num_plots_reais: int) -> None:
+        """Desliga a renderização de subplots excedentes criados pela matriz."""
+        for i in range(num_plots_reais, len(axes)):
+            axes[i].set_visible(False)
+
+    def plotar_distribuicoes(
+        self, 
+        variaveis: List[str], 
+        hue: Optional[str] = None, 
+        max_colunas: int = 3
+    ) -> None:
+        """
+        Gera histogramas com KDE para analisar a densidade probabilística das features.
+        Fundamental para checar o comportamento dos fatores gerados pela PCA.
+        """
+        linhas, colunas = self._calcular_geometria_grid(len(variaveis), max_colunas)
+        fig, axes = plt.subplots(linhas, colunas, figsize=(5 * colunas, 4 * linhas))
+        axes = axes.flatten() if len(variaveis) > 1 else [axes]
+
+        for i, var in enumerate(variaveis):
+            # Validação fail-fast
+            if var not in self.df.columns:
+                raise KeyError(f"Feature '{var}' não encontrada no DataFrame.")
+                
+            sns.histplot(
+                data=self.df, 
+                x=var, 
+                hue=hue, 
+                kde=True, 
+                ax=axes[i], 
+                bins=20,
+                alpha=0.6,
+                palette='Set2' if hue else None
+            )
+            
+            axes[i].set_title(f'Distribuição: {var.replace("_", " ").title()}', fontsize=12, pad=10)
+            axes[i].set_xlabel('')
+            axes[i].set_ylabel('Frequência' if i % colunas == 0 else '') # Y-label apenas nas bordas
+            axes[i].spines[['top', 'right']].set_visible(False)
+
+        self._remover_eixos_vazios(axes, len(variaveis))
+        
+        fig.suptitle('Análise Univariada: Densidade das Variáveis', fontsize=16, y=1.02)
+        fig.tight_layout()
+        plt.show()
+
+    def plotar_relacionamentos(
+        self, 
+        preditores: List[str], 
+        alvo: str, 
+        hue: Optional[str] = None, 
+        max_colunas: int = 3
+    ) -> None:
+        """
+        Gera scatter plots bidimensionais mapeando Preditores (X) vs Alvo (y).
+        Adiciona uma reta de tendência (Regressão Linear) para diagnóstico de linearidade e heterocedasticidade.
+        """
+        linhas, colunas = self._calcular_geometria_grid(len(preditores), max_colunas)
+        fig, axes = plt.subplots(linhas, colunas, figsize=(5 * colunas, 4 * linhas))
+        axes = axes.flatten() if len(preditores) > 1 else [axes]
+
+        for i, fator in enumerate(preditores):
+            # 1. Plot da dispersão com a estratificação (hue)
+            sns.scatterplot(
+                data=self.df, 
+                x=fator, 
+                y=alvo, 
+                hue=hue, 
+                ax=axes[i], 
+                alpha=0.6,
+                palette='Set2' if hue else None
+            )
+            
+            # 2. Sobreposição da reta de regressão global (sem hue) para capturar o "efeito principal"
+            sns.regplot(
+                data=self.df, 
+                x=fator, 
+                y=alvo, 
+                ax=axes[i], 
+                scatter=False, 
+                color='black', 
+                line_kws={'linestyle':'--', 'linewidth': 1.5}
+            )
+
+            axes[i].set_title(f'{fator.replace("FATOR_", "")} vs {alvo.replace("TAXA_", "")}', fontsize=12)
+            axes[i].set_xlabel("Score do Fator PCA")
+            axes[i].set_ylabel(alvo.replace("_", " ").title() if i % colunas == 0 else '')
+            axes[i].spines[['top', 'right']].set_visible(False)
+            
+            # Limpa legendas redundantes (mantém apenas a do primeiro plot, se existir)
+            if hue and i > 0 and axes[i].get_legend() is not None:
+                axes[i].get_legend().remove()
+
+        # Ajuste fino da legenda do primeiro plot (caso exista)
+        if hue and axes[0].get_legend() is not None:
+            sns.move_legend(axes[0], "upper left", bbox_to_anchor=(1, 1))
+
+        self._remover_eixos_vazios(axes, len(preditores))
+        
+        fig.suptitle(f'Análise Bivariada: Preditores vs {alvo}', fontsize=16, y=1.02)
+        fig.tight_layout()
+        plt.show()
