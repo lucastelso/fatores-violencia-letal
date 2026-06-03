@@ -1,12 +1,10 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 from typing import Dict, Any, Tuple
 from sklearn.exceptions import NotFittedError
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import RandomizedSearchCV, learning_curve, RepeatedKFold
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 
 class AvaliadorRandomForest:
     """
@@ -52,9 +50,9 @@ class AvaliadorRandomForest:
         self.melhor_modelo_ = search.best_estimator_
         self.melhores_params_ = search.best_params_
         
-        print(f"\n✅ Otimização Concluída!")
-        print(f"🏆 Melhor R² no CV: {search.best_score_:.4f}")
-        print(f"🔧 Melhores Parâmetros: {self.melhores_params_}")
+        print(f"\nOtimização Concluída!")
+        print(f"Melhor R² no CV: {search.best_score_:.4f}")
+        print(f"Melhores Parâmetros: {self.melhores_params_}")
         
         return self.melhor_modelo_
 
@@ -105,7 +103,7 @@ class AvaliadorRandomForest:
 
         fig, ax = plt.subplots(figsize=(10, 6))
         
-        ax.set_title("📈 Curva de Aprendizado (Random Forest Otimizada)", fontsize=14, pad=15)
+        ax.set_title("Curva de Aprendizado (Random Forest Otimizada)", fontsize=14, pad=15)
         ax.set_xlabel("Número de Instâncias de Treino", fontsize=12)
         ax.set_ylabel("R² (Coeficiente de Determinação)", fontsize=12)
         
