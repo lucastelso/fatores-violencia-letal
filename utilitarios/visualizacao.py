@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from statsmodels.tools.tools import add_constant
+from sklearn.metrics import r2_score, mean_squared_error
 
 
 ColunasDataset = Literal[
@@ -269,5 +270,127 @@ class VisualizadorExploratorio:
         self._remover_eixos_vazios(axes, len(preditores))
         
         fig.suptitle(f'Análise Bivariada: Preditores vs {alvo}', fontsize=16, y=1.02)
+        fig.tight_layout()
+        plt.show()
+
+class DiagnosticoRegressao:
+    """
+    Classe padronizada para avaliação visual de modelos de regressão contínua.
+    Garante identidade visual e rigor estatístico comparativo entre paradigmas.
+    """
+    
+    def __init__(self):
+        # Configurações globais de estilo limpo herdadas do seu design
+        sns.set_theme(style="white") 
+
+    def _aplicar_identidade_visual(self, ax: plt.Axes) -> None:
+        """
+        Aplica o padrão arquitetural de eixos e grids.
+        Isola a manipulação da interface orientada a objetos (evitando o plt.gca()).
+        """
+        # Spines (Bordas)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('black')
+        ax.spines['bottom'].set_color('black')
+        ax.spines['left'].set_linewidth(1.2)
+        ax.spines['bottom'].set_linewidth(1.2)
+        
+        # Grid Inteligente: Tracejado, leve e atrás dos dados
+        ax.grid(True, color='lightgrey', linestyle='--', alpha=0.7)
+        ax.set_axisbelow(True)
+
+    def _calcular_limites_dinamicos(self, y_true: np.ndarray, y_pred: np.ndarray) -> tuple:
+        """Calcula limites automáticos com uma margem de respiro de 5% para os eixos."""
+        min_val = min(y_true.min(), y_pred.min())
+        max_val = max(y_true.max(), y_pred.max())
+        margem = (max_val - min_val) * 0.05
+        return (min_val - margem, max_val + margem)
+
+    def plotar_treino_teste_lado_a_lado(
+        self,
+        y_train_true: np.ndarray,
+        y_train_pred: np.ndarray,
+        y_test_true: np.ndarray,
+        y_test_pred: np.ndarray,
+        hue_train: Optional[pd.Series] = None,
+        hue_test: Optional[pd.Series] = None,
+        ano_treino: str = "2010",
+        ano_teste: str = "2011",
+        titulo_modelo: str = "Random Forest"
+    ) -> None:
+        """
+        Renderiza o diagnóstico bifásico (Treino vs Teste/Out-of-Time).
+        Exige que as predições sejam feitas a priori, garantindo a separação de responsabilidades.
+        """
+        fig, axs = plt.subplots(1, 2, figsize=(16, 7))
+        
+        dados_plot = [
+            (axs[0], y_train_true, y_train_pred, hue_train, f'Treino ({ano_treino})'),
+            (axs[1], y_test_true, y_test_pred, hue_test, f'Teste Out-of-Time ({ano_teste})')
+        ]
+
+        # Descobrindo o limite global para manter a mesma escala em ambos os gráficos
+        limite_global = self._calcular_limites_dinamicos(
+            np.concatenate([y_train_true, y_test_true]),
+            np.concatenate([y_train_pred, y_test_pred])
+        )
+
+        for ax, y_true, y_pred, hue, label_split in dados_plot:
+            # Métricas
+            r2 = r2_score(y_true, y_pred)
+            rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+            
+            # Scatter Plot com estratificação regional (hue)
+            sns.scatterplot(
+                x=y_true, 
+                y=y_pred, 
+                hue=hue,
+                ax=ax,
+                s=50,
+                alpha=0.7,
+                palette='Set1' if hue is not None else None,
+                edgecolor='k',
+                linewidth=0.5
+            )
+            
+            # Linha de Tendência do Modelo (Regressão Linear nos resíduos)
+            sns.regplot(
+                x=y_true, 
+                y=y_pred, 
+                ax=ax, 
+                scatter=False, 
+                color='red', 
+                line_kws={'linewidth': 2},
+                label='Tendência das Previsões'
+            )
+            
+            # A Matemática Pura: Reta de Previsão Perfeita (y = x)
+            ax.plot(
+                [limite_global[0], limite_global[1]], 
+                [limite_global[0], limite_global[1]], 
+                color='black', linestyle='--', linewidth=1.5, label='Previsão Perfeita ($y = \\hat{y}$)'
+            )
+
+            # Estilização
+            ax.set_title(f'{label_split}\n$R^2$ = {r2:.3f} | RMSE = {rmse:.1f}', fontsize=13, pad=15)
+            ax.set_xlabel('Taxa de Violência Real (Observada)', fontsize=11)
+            ax.set_ylabel('Taxa de Violência Prevista', fontsize=11)
+            
+            # Força a proporção geométrica 1:1 e trava os limites
+            ax.set_aspect('equal', 'box')
+            ax.set_xlim(limite_global)
+            ax.set_ylim(limite_global)
+            
+            self._aplicar_identidade_visual(ax)
+            
+            # Arrumando a legenda (mantém apenas uma limpa)
+            if ax.get_legend() is not None:
+                if ax == axs[1]: # Legenda completa apenas no gráfico da direita
+                    sns.move_legend(ax, "upper left", bbox_to_anchor=(1.05, 1))
+                else:
+                    ax.get_legend().remove()
+
+        fig.suptitle(f'Diagnóstico de Previsão Espaço-Temporal: {titulo_modelo}', fontsize=16, y=1.05)
         fig.tight_layout()
         plt.show()
