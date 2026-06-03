@@ -93,7 +93,6 @@ class EstatisticasDescritivas:
         # plt.show() libera a figura e entrega para a interface
         plt.show()
 
-
 class DiagnosticoMulticolinearidade:
     """
     Classe para diagnóstico visual e quantitativo de multicolinearidade.
@@ -149,8 +148,6 @@ class DiagnosticoMulticolinearidade:
         vif_data = vif_data[vif_data["Feature"] != "const"]
         
         return vif_data.round(2).sort_values(by="VIF", ascending=False).reset_index(drop=True)
-    
-
 
 class VisualizadorExploratorio:
     """
