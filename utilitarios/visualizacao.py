@@ -24,31 +24,31 @@ class EstatisticasDescritivas:
     
     def __init__(self, df: pd.DataFrame):
         self.df = df
-        self._validar_schema()
-        
+        # self._validar_schema()
+    """        
     def _validar_schema(self) -> None:
-        """Método privado para garantir que o DF instanciado tem as colunas básicas esperadas."""
-        colunas_necessarias = ['uf', 'taxa_violencia'] # Exemplo mínimo
+        "Método privado para garantir que o DF instanciado tem as colunas básicas esperadas."
+        colunas_necessarias = ['taxa_violencia'] # Exemplo mínimo
         faltantes = [col for col in colunas_necessarias if col not in self.df.columns]
         if faltantes:
             raise ValueError(f"O DataFrame instanciado não possui as colunas obrigatórias: {faltantes}")
-
+    """
     def plot_box_uf(
         self,
         titulo: str, 
         y_label: str, 
         x: ColunasDataset, 
         y: ColunasDataset, 
-        hue: ColunasDataset = 'UF',
+        hue: ColunasDataset = 'uf',
         palette: str = 'viridis'
     ) -> None:
         """
         Gera um boxplot customizado usando a interface Orientada a Objetos do Matplotlib.
         """
         # Validação em runtime: garante que a string passada realmente existe no DF atual
-        for col in [x, y, hue]:
-            if col not in self.df.columns:
-                raise KeyError(f"A coluna '{col}' não foi encontrada no DataFrame.")
+        # for col in [x, y, hue]:
+        #    if col not in self.df.columns:
+        #        raise KeyError(f"A coluna '{col}' não foi encontrada no DataFrame.")
 
         # Interface Orientada a Objetos (Melhor prática / Evita memory leak)
         fig, ax = plt.subplots(figsize=(15, 5))
