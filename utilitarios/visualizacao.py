@@ -5,11 +5,15 @@ import numpy as np
 from typing import Literal, Optional, List
 
 import seaborn as sns
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from statsmodels.tools.tools import add_constant
 from sklearn.metrics import r2_score, mean_squared_error
+
+
 
 
 ColunasDataset = Literal[
@@ -501,3 +505,123 @@ class DiagnosticoRegressao:
         fig.tight_layout()
         plt.show()
 
+    def plotar_decadencia_temporal(
+        self,
+        anos_x: np.ndarray,
+        r2_y: np.ndarray,
+        limite_inferior: float = 0.0
+    ) -> None:
+        """
+        Plota a curva de degradação preditiva do modelo ao longo do tempo (Model Decay).
+        Mostra visualmente como a eficácia do modelo treinado em T0 cai em T+n.
+        """
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # A Linha de Tendência de Degradação
+        sns.lineplot(
+            x=anos_x, 
+            y=r2_y, 
+            marker='o', 
+            markersize=8,
+            linewidth=2.5,
+            color='crimson',
+            ax=ax
+        )
+        
+        # Rótulos precisos acima dos marcadores (sem hardcoding mágico de +0.02)
+        margem_y = (max(r2_y) - min(r2_y)) * 0.05
+        for x_val, y_val in zip(anos_x, r2_y):
+            ax.text(
+                x_val, 
+                y_val + margem_y, 
+                f'{y_val:.3f}', 
+                ha='center', 
+                va='bottom', 
+                fontsize=11, 
+                fontweight='bold',
+                color='black'
+            )
+
+        # Identidade Visual Herdada
+        self._aplicar_identidade_visual(ax)
+        ax.grid(True, linestyle='--', alpha=0.5, axis='y') # Grid apenas horizontal
+        
+        # Configuração de Eixos
+        ax.set_title('Decadência Temporal Preditiva (Model Decay)', fontsize=16, pad=20, fontweight='bold')
+        ax.set_xlabel('Ano de Previsão Out-of-Time', fontsize=12, labelpad=10)
+        ax.set_ylabel('Coeficiente de Determinação ($R^2$)', fontsize=12, labelpad=10)
+        
+        # Força os ticks a serem números inteiros (anos não têm decimais)
+        ax.set_xticks(anos_x)
+        ax.set_ylim(limite_inferior, min(1.0, max(r2_y) + 0.1))
+        
+        fig.tight_layout()
+        plt.show()
+
+    def plotar_importancia_variaveis(
+        self,
+        nomes_features: np.ndarray,
+        importancias: np.ndarray,
+        desvios_padrao: Optional[np.ndarray] = None,
+        titulo: str = 'Importância dos Fatores (Permutation Importance)'
+    ) -> None:
+        """
+        Gráfico horizontal rigoroso para análise de impacto dos preditores.
+        Renderiza com o colormap 'viridis' mapeado dinamicamente sobre a magnitude da importância.
+        """
+
+        # Ordenação descendente
+        indices_ordenados = np.argsort(importancias)
+        nomes_ordenados = nomes_features[indices_ordenados]
+        importancias_ordenadas = importancias[indices_ordenados]
+        xerr = desvios_padrao[indices_ordenados] if desvios_padrao is not None else None
+        
+        # Normaliza as importâncias para uma escala de 0 a 1
+        norm = mcolors.Normalize(vmin=importancias_ordenadas.min(), vmax=importancias_ordenadas.max())
+        # Acessa o colormap nativo moderno (evitando métodos descontinuados)
+        cmap = mpl.colormaps['viridis']
+        # Mapeia as cores baseadas no peso matemático
+        cores_viridis = cmap(norm(importancias_ordenadas))
+        # ----------------------------------------
+
+        fig, ax = plt.subplots(figsize=(14, 10)) # Tamanho ajustado conforme sua preferência
+        
+        bars = ax.barh(
+            nomes_ordenados, 
+            importancias_ordenadas,
+            xerr=xerr,
+            align='center',
+            color=cores_viridis, # Injeta a matriz de cores
+            edgecolor='black',
+            linewidth=1.2,
+            capsize=6, 
+            alpha=0.9
+        )
+        
+        # Adiciona rótulos percentuais à direita das barras (formatados)
+        for bar in bars:
+            largura = bar.get_width()
+            ax.text(
+                largura + (largura * 0.02), 
+                bar.get_y() + bar.get_height() / 2, 
+                f'{largura * 100:.2f}%', # Exibindo como percentual conforme você havia feito
+                va='center', 
+                ha='left', 
+                fontsize=14,
+                fontweight='bold'
+            )
+
+        self._aplicar_identidade_visual(ax)
+        ax.grid(True, linestyle='--', alpha=0.5, axis='x')
+        ax.set_axisbelow(True)
+        
+        # Estilização herdada
+        ax.tick_params(axis='y', labelsize=14)
+        ax.tick_params(axis='x', labelsize=14)
+        
+        ax.set_title(titulo, fontsize=20, pad=20, fontweight='bold')
+        ax.set_xlabel('Importância Relativa (Redução do Erro %)', fontsize=16, labelpad=15)
+        ax.set_xlim(0, max(importancias_ordenadas) * 1.15)
+        
+        fig.tight_layout()
+        plt.show()
