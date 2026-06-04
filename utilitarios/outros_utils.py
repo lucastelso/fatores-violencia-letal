@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 modelos = Literal[
-    'modelo_novo_683_a94.pkl', 'melhor_rf.pkl'
+    'modelo_rf_683.pkl', 'melhor_rf.pkl'
     ]
 
 def carregar_modelo(
