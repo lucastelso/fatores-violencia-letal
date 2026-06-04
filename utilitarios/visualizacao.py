@@ -391,8 +391,8 @@ class DiagnosticoRegressao:
         fig.suptitle(f'Diagnóstico de Previsão Espaço-Temporal: {titulo_modelo}', fontsize=16, y=1.05)
         fig.tight_layout()
         plt.show()
-
-def plotar_desempenho_por_estrato(
+    
+    def plotar_desempenho_por_estrato(
         self,
         y_true: np.ndarray,
         y_pred: np.ndarray,
@@ -500,3 +500,4 @@ def plotar_desempenho_por_estrato(
         )
         fig.tight_layout()
         plt.show()
+
