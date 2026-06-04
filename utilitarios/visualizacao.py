@@ -391,3 +391,112 @@ class DiagnosticoRegressao:
         fig.suptitle(f'Diagnóstico de Previsão Espaço-Temporal: {titulo_modelo}', fontsize=16, y=1.05)
         fig.tight_layout()
         plt.show()
+
+def plotar_desempenho_por_estrato(
+        self,
+        y_true: np.ndarray,
+        y_pred: np.ndarray,
+        estratos: np.ndarray,
+        nome_estrato: str = "Região",
+        max_colunas: int = 3
+    ) -> None:
+        """
+        Gera visualizações de 'Small Multiples' para avaliar o viés algorítmico 
+        em diferentes categorias (ex: Regiões).
+        """
+        import math
+        
+        # Identifica as categorias únicas (ex: as 5 regiões do Brasil)
+        categorias = np.unique(estratos)
+        num_plots = len(categorias)
+        
+        # Calcula a geometria do grid de forma inteligente
+        colunas = min(num_plots, max_colunas)
+        linhas = math.ceil(num_plots / colunas)
+        
+        # sharex e sharey garantem que a escala seja idêntica para não distorcer a percepção
+        fig, axes = plt.subplots(
+            linhas, colunas, 
+            figsize=(5.5 * colunas, 5 * linhas), 
+            sharex=True, sharey=True
+        )
+        
+        # Achatamento da matriz de eixos para facilitar iteração
+        axes = axes.flatten() if num_plots > 1 else [axes]
+        
+        # Limites globais baseados na variação total de TODAS as regiões juntas
+        limite_global = self._calcular_limites_dinamicos(y_true, y_pred)
+        
+        # R2 do país inteiro
+        r2_global = r2_score(y_true, y_pred)
+        
+        for i, categoria in enumerate(categorias):
+            ax = axes[i]
+            
+            # MÁSCARA SEGURA (NumPy boolean indexing estrito)
+            mask = (estratos == categoria)
+            y_real_cat = y_true[mask]
+            y_pred_cat = y_pred[mask]
+            
+            # Trava de segurança: se a região não tiver municípios no split
+            if len(y_real_cat) < 2:
+                ax.set_title(f'{categoria}\n(Dados Insuficientes)', fontsize=12)
+                self._aplicar_identidade_visual(ax)
+                continue
+                
+            r2_local = r2_score(y_real_cat, y_pred_cat)
+            rmse_local = np.sqrt(mean_squared_error(y_real_cat, y_pred_cat))
+            
+            # Scatter Plot Local
+            sns.scatterplot(
+                x=y_real_cat, 
+                y=y_pred_cat, 
+                ax=ax, 
+                s=45,
+                alpha=0.7,
+                color='steelblue', # Mantém uma cor sóbria já que os títulos dizem a região
+                edgecolor='k',
+                linewidth=0.5
+            )
+            
+            # Linha de Tendência do erro local
+            sns.regplot(
+                x=y_real_cat, 
+                y=y_pred_cat, 
+                ax=ax, 
+                scatter=False, 
+                color='red', 
+                line_kws={'linewidth': 1.5}
+            )
+            
+            # Reta Matemática Perfeita
+            ax.plot(
+                [limite_global[0], limite_global[1]], 
+                [limite_global[0], limite_global[1]], 
+                color='black', linestyle='--', linewidth=1.5
+            )
+            
+            # Identidade Visual e Limites Quadrados
+            ax.set_aspect('equal', 'box')
+            ax.set_xlim(limite_global)
+            ax.set_ylim(limite_global)
+            self._aplicar_identidade_visual(ax)
+            
+            ax.set_title(f'{categoria}\n$R^2$ = {r2_local:.3f} | RMSE = {rmse_local:.1f}', fontsize=12, pad=10)
+            
+            # Inteligência de Labels: Apenas nas extremidades do Grid para reduzir poluição visual
+            if i >= (linhas - 1) * colunas:
+                ax.set_xlabel('Taxa Real (Observada)', fontsize=11)
+            if i % colunas == 0:
+                ax.set_ylabel('Taxa Prevista', fontsize=11)
+
+        # Desligar os subplots sobressalentes gerados pela matriz matemática
+        for j in range(num_plots, len(axes)):
+            axes[j].set_visible(False)
+            
+        fig.suptitle(
+            f'Avaliação de Desempenho Espacial: {nome_estrato}\n($R^2$ Global = {r2_global:.3f})', 
+            fontsize=16, y=1.02, fontweight='bold'
+        )
+        fig.tight_layout()
+        plt.show()

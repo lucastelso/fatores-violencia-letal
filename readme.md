@@ -13,7 +13,6 @@ Os resultados deste trabalho validam a hipótese central da pesquisa de que a vi
 Os resultados do modelo RLMM-BC sugerem que o volume populacional urbano e o desemprego estão diretamente associados ao aumento da incidência de violência letal nos municípios e devem ser levados em conta na formulação de políticas públicas. No caso do RFR, a violência é explicada pelo conjunto de preditores de forma combinada, conseguindo capturar relações complexas que se mantiveram relevantes ao longo do tempo.
 
 #### Comparação dos coeficientes normalizados dos modelos paramétricos
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | FATOR | RLM | p >\|t\| | Log-RLM | p >\|t\| | RLM-BC | p >\|t\| | RLMM-BC | p >\|t\| |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | Intercepto | 31,608 | 0,00 | 24,483 | 0,00 | 25,978 | 0,00 | 33,473 | 0,00 |
