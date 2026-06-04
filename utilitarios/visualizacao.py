@@ -5,10 +5,15 @@ import numpy as np
 from typing import Literal, Optional, List
 
 import seaborn as sns
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from statsmodels.tools.tools import add_constant
+from sklearn.metrics import r2_score, mean_squared_error
+
+
 
 
 ColunasDataset = Literal[
@@ -92,7 +97,6 @@ class EstatisticasDescritivas:
         # plt.show() libera a figura e entrega para a interface
         plt.show()
 
-
 class DiagnosticoMulticolinearidade:
     """
     Classe para diagnóstico visual e quantitativo de multicolinearidade.
@@ -148,8 +152,6 @@ class DiagnosticoMulticolinearidade:
         vif_data = vif_data[vif_data["Feature"] != "const"]
         
         return vif_data.round(2).sort_values(by="VIF", ascending=False).reset_index(drop=True)
-    
-
 
 class VisualizadorExploratorio:
     """
@@ -269,5 +271,357 @@ class VisualizadorExploratorio:
         self._remover_eixos_vazios(axes, len(preditores))
         
         fig.suptitle(f'Análise Bivariada: Preditores vs {alvo}', fontsize=16, y=1.02)
+        fig.tight_layout()
+        plt.show()
+
+class DiagnosticoRegressao:
+    """
+    Classe padronizada para avaliação visual de modelos de regressão contínua.
+    Garante identidade visual e rigor estatístico comparativo entre paradigmas.
+    """
+    
+    def __init__(self):
+        # Configurações globais de estilo limpo herdadas do seu design
+        sns.set_theme(style="white") 
+
+    def _aplicar_identidade_visual(self, ax: plt.Axes) -> None:
+        """
+        Aplica o padrão arquitetural de eixos e grids.
+        Isola a manipulação da interface orientada a objetos (evitando o plt.gca()).
+        """
+        # Spines (Bordas)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('black')
+        ax.spines['bottom'].set_color('black')
+        ax.spines['left'].set_linewidth(1.2)
+        ax.spines['bottom'].set_linewidth(1.2)
+        
+        # Grid Inteligente: Tracejado, leve e atrás dos dados
+        ax.grid(True, color='lightgrey', linestyle='--', alpha=0.7)
+        ax.set_axisbelow(True)
+
+    def _calcular_limites_dinamicos(self, y_true: np.ndarray, y_pred: np.ndarray) -> tuple:
+        """Calcula limites automáticos com uma margem de respiro de 5% para os eixos."""
+        min_val = min(y_true.min(), y_pred.min())
+        max_val = max(y_true.max(), y_pred.max())
+        margem = (max_val - min_val) * 0.05
+        return (min_val - margem, max_val + margem)
+
+    def plotar_treino_teste_lado_a_lado(
+        self,
+        y_train_true: np.ndarray,
+        y_train_pred: np.ndarray,
+        y_test_true: np.ndarray,
+        y_test_pred: np.ndarray,
+        hue_train: Optional[pd.Series] = None,
+        hue_test: Optional[pd.Series] = None,
+        ano_treino: str = "2010",
+        ano_teste: str = "2011",
+        titulo_modelo: str = "Random Forest"
+    ) -> None:
+        """
+        Renderiza o diagnóstico bifásico (Treino vs Teste/Out-of-Time).
+        Exige que as predições sejam feitas a priori, garantindo a separação de responsabilidades.
+        """
+        fig, axs = plt.subplots(1, 2, figsize=(16, 7))
+        
+        dados_plot = [
+            (axs[0], y_train_true, y_train_pred, hue_train, f'Treino ({ano_treino})'),
+            (axs[1], y_test_true, y_test_pred, hue_test, f'Teste Out-of-Time ({ano_teste})')
+        ]
+
+        # Descobrindo o limite global para manter a mesma escala em ambos os gráficos
+        limite_global = self._calcular_limites_dinamicos(
+            np.concatenate([y_train_true, y_test_true]),
+            np.concatenate([y_train_pred, y_test_pred])
+        )
+
+        for ax, y_true, y_pred, hue, label_split in dados_plot:
+            # Métricas
+            r2 = r2_score(y_true, y_pred)
+            rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+            
+            # Scatter Plot com estratificação regional (hue)
+            sns.scatterplot(
+                x=y_true, 
+                y=y_pred, 
+                hue=hue,
+                ax=ax,
+                s=50,
+                alpha=0.7,
+                palette='Set1' if hue is not None else None,
+                edgecolor='k',
+                linewidth=0.5
+            )
+            
+            # Linha de Tendência do Modelo (Regressão Linear nos resíduos)
+            sns.regplot(
+                x=y_true, 
+                y=y_pred, 
+                ax=ax, 
+                scatter=False, 
+                color='red', 
+                line_kws={'linewidth': 2},
+                label='Tendência das Previsões'
+            )
+            
+            # A Matemática Pura: Reta de Previsão Perfeita (y = x)
+            ax.plot(
+                [limite_global[0], limite_global[1]], 
+                [limite_global[0], limite_global[1]], 
+                color='black', linestyle='--', linewidth=1.5, label='Previsão Perfeita ($y = \\hat{y}$)'
+            )
+
+            # Estilização
+            ax.set_title(f'{label_split}\n$R^2$ = {r2:.3f} | RMSE = {rmse:.1f}', fontsize=13, pad=15)
+            ax.set_xlabel('Taxa de Violência Real (Observada)', fontsize=11)
+            ax.set_ylabel('Taxa de Violência Prevista', fontsize=11)
+            
+            # Força a proporção geométrica 1:1 e trava os limites
+            ax.set_aspect('equal', 'box')
+            ax.set_xlim(limite_global)
+            ax.set_ylim(limite_global)
+            
+            self._aplicar_identidade_visual(ax)
+            
+            # Arrumando a legenda (mantém apenas uma limpa)
+            if ax.get_legend() is not None:
+                if ax == axs[1]: # Legenda completa apenas no gráfico da direita
+                    sns.move_legend(ax, "upper left", bbox_to_anchor=(1.05, 1))
+                else:
+                    ax.get_legend().remove()
+
+        fig.suptitle(f'Diagnóstico de Previsão Espaço-Temporal: {titulo_modelo}', fontsize=16, y=1.05)
+        fig.tight_layout()
+        plt.show()
+    
+    def plotar_desempenho_por_estrato(
+        self,
+        y_true: np.ndarray,
+        y_pred: np.ndarray,
+        estratos: np.ndarray,
+        nome_estrato: str = "Região",
+        max_colunas: int = 3
+    ) -> None:
+        """
+        Gera visualizações de 'Small Multiples' para avaliar o viés algorítmico 
+        em diferentes categorias (ex: Regiões).
+        """
+        import math
+        
+        # Identifica as categorias únicas (ex: as 5 regiões do Brasil)
+        categorias = np.unique(estratos)
+        num_plots = len(categorias)
+        
+        # Calcula a geometria do grid de forma inteligente
+        colunas = min(num_plots, max_colunas)
+        linhas = math.ceil(num_plots / colunas)
+        
+        # sharex e sharey garantem que a escala seja idêntica para não distorcer a percepção
+        fig, axes = plt.subplots(
+            linhas, colunas, 
+            figsize=(5.5 * colunas, 5 * linhas), 
+            sharex=True, sharey=True
+        )
+        
+        # Achatamento da matriz de eixos para facilitar iteração
+        axes = axes.flatten() if num_plots > 1 else [axes]
+        
+        # Limites globais baseados na variação total de TODAS as regiões juntas
+        limite_global = self._calcular_limites_dinamicos(y_true, y_pred)
+        
+        # R2 do país inteiro
+        r2_global = r2_score(y_true, y_pred)
+        
+        for i, categoria in enumerate(categorias):
+            ax = axes[i]
+            
+            # MÁSCARA SEGURA (NumPy boolean indexing estrito)
+            mask = (estratos == categoria)
+            y_real_cat = y_true[mask]
+            y_pred_cat = y_pred[mask]
+            
+            # Trava de segurança: se a região não tiver municípios no split
+            if len(y_real_cat) < 2:
+                ax.set_title(f'{categoria}\n(Dados Insuficientes)', fontsize=12)
+                self._aplicar_identidade_visual(ax)
+                continue
+                
+            r2_local = r2_score(y_real_cat, y_pred_cat)
+            rmse_local = np.sqrt(mean_squared_error(y_real_cat, y_pred_cat))
+            
+            # Scatter Plot Local
+            sns.scatterplot(
+                x=y_real_cat, 
+                y=y_pred_cat, 
+                ax=ax, 
+                s=45,
+                alpha=0.7,
+                color='steelblue', # Mantém uma cor sóbria já que os títulos dizem a região
+                edgecolor='k',
+                linewidth=0.5
+            )
+            
+            # Linha de Tendência do erro local
+            sns.regplot(
+                x=y_real_cat, 
+                y=y_pred_cat, 
+                ax=ax, 
+                scatter=False, 
+                color='red', 
+                line_kws={'linewidth': 1.5}
+            )
+            
+            # Reta Matemática Perfeita
+            ax.plot(
+                [limite_global[0], limite_global[1]], 
+                [limite_global[0], limite_global[1]], 
+                color='black', linestyle='--', linewidth=1.5
+            )
+            
+            # Identidade Visual e Limites Quadrados
+            ax.set_aspect('equal', 'box')
+            ax.set_xlim(limite_global)
+            ax.set_ylim(limite_global)
+            self._aplicar_identidade_visual(ax)
+            
+            ax.set_title(f'{categoria}\n$R^2$ = {r2_local:.3f} | RMSE = {rmse_local:.1f}', fontsize=12, pad=10)
+            
+            # Inteligência de Labels: Apenas nas extremidades do Grid para reduzir poluição visual
+            if i >= (linhas - 1) * colunas:
+                ax.set_xlabel('Taxa Real (Observada)', fontsize=11)
+            if i % colunas == 0:
+                ax.set_ylabel('Taxa Prevista', fontsize=11)
+
+        # Desligar os subplots sobressalentes gerados pela matriz matemática
+        for j in range(num_plots, len(axes)):
+            axes[j].set_visible(False)
+            
+        fig.suptitle(
+            f'Avaliação de Desempenho Espacial: {nome_estrato}\n($R^2$ Global = {r2_global:.3f})', 
+            fontsize=16, y=1.02, fontweight='bold'
+        )
+        fig.tight_layout()
+        plt.show()
+
+    def plotar_decadencia_temporal(
+        self,
+        anos_x: np.ndarray,
+        r2_y: np.ndarray,
+        limite_inferior: float = 0.0
+    ) -> None:
+        """
+        Plota a curva de degradação preditiva do modelo ao longo do tempo (Model Decay).
+        Mostra visualmente como a eficácia do modelo treinado em T0 cai em T+n.
+        """
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # A Linha de Tendência de Degradação
+        sns.lineplot(
+            x=anos_x, 
+            y=r2_y, 
+            marker='o', 
+            markersize=8,
+            linewidth=2.5,
+            color='crimson',
+            ax=ax
+        )
+        
+        # Rótulos precisos acima dos marcadores (sem hardcoding mágico de +0.02)
+        margem_y = (max(r2_y) - min(r2_y)) * 0.05
+        for x_val, y_val in zip(anos_x, r2_y):
+            ax.text(
+                x_val, 
+                y_val + margem_y, 
+                f'{y_val:.3f}', 
+                ha='center', 
+                va='bottom', 
+                fontsize=11, 
+                fontweight='bold',
+                color='black'
+            )
+
+        # Identidade Visual Herdada
+        self._aplicar_identidade_visual(ax)
+        ax.grid(True, linestyle='--', alpha=0.5, axis='y') # Grid apenas horizontal
+        
+        # Configuração de Eixos
+        ax.set_title('Decadência Temporal Preditiva (Model Decay)', fontsize=16, pad=20, fontweight='bold')
+        ax.set_xlabel('Ano de Previsão Out-of-Time', fontsize=12, labelpad=10)
+        ax.set_ylabel('Coeficiente de Determinação ($R^2$)', fontsize=12, labelpad=10)
+        
+        # Força os ticks a serem números inteiros (anos não têm decimais)
+        ax.set_xticks(anos_x)
+        ax.set_ylim(limite_inferior, min(1.0, max(r2_y) + 0.1))
+        
+        fig.tight_layout()
+        plt.show()
+
+    def plotar_importancia_variaveis(
+        self,
+        nomes_features: np.ndarray,
+        importancias: np.ndarray,
+        desvios_padrao: Optional[np.ndarray] = None,
+        titulo: str = 'Importância dos Fatores (Permutation Importance)'
+    ) -> None:
+        """
+        Gráfico horizontal rigoroso para análise de impacto dos preditores.
+        Renderiza com o colormap 'viridis' mapeado dinamicamente sobre a magnitude da importância.
+        """
+
+        # Ordenação descendente
+        indices_ordenados = np.argsort(importancias)
+        nomes_ordenados = nomes_features[indices_ordenados]
+        importancias_ordenadas = importancias[indices_ordenados]
+        xerr = desvios_padrao[indices_ordenados] if desvios_padrao is not None else None
+        
+        # Normaliza as importâncias para uma escala de 0 a 1
+        norm = mcolors.Normalize(vmin=importancias_ordenadas.min(), vmax=importancias_ordenadas.max())
+        # Acessa o colormap nativo moderno (evitando métodos descontinuados)
+        cmap = mpl.colormaps['viridis']
+        # Mapeia as cores baseadas no peso matemático
+        cores_viridis = cmap(norm(importancias_ordenadas))
+        # ----------------------------------------
+
+        fig, ax = plt.subplots(figsize=(14, 10)) # Tamanho ajustado conforme sua preferência
+        
+        bars = ax.barh(
+            nomes_ordenados, 
+            importancias_ordenadas,
+            xerr=xerr,
+            align='center',
+            color=cores_viridis, # Injeta a matriz de cores
+            edgecolor='black',
+            linewidth=1.2,
+            capsize=6, 
+            alpha=0.9
+        )
+        
+        # Adiciona rótulos percentuais à direita das barras (formatados)
+        for bar in bars:
+            largura = bar.get_width()
+            ax.text(
+                largura + (largura * 0.02), 
+                bar.get_y() + bar.get_height() / 2, 
+                f'{largura * 100:.2f}%', # Exibindo como percentual conforme você havia feito
+                va='center', 
+                ha='left', 
+                fontsize=14,
+                fontweight='bold'
+            )
+
+        self._aplicar_identidade_visual(ax)
+        ax.grid(True, linestyle='--', alpha=0.5, axis='x')
+        ax.set_axisbelow(True)
+        
+        # Estilização herdada
+        ax.tick_params(axis='y', labelsize=14)
+        ax.tick_params(axis='x', labelsize=14)
+        
+        ax.set_title(titulo, fontsize=20, pad=20, fontweight='bold')
+        ax.set_xlabel('Importância Relativa (Redução do Erro %)', fontsize=16, labelpad=15)
+        ax.set_xlim(0, max(importancias_ordenadas) * 1.15)
+        
         fig.tight_layout()
         plt.show()
