@@ -183,7 +183,6 @@ class AvaliadorRegressaoParametrica:
             e Homocedasticidade (Breusch-Pagan).
             """
             
-            # A importação direta da biblioteca econométrica
             try:
                 from statstests.tests import shapiro_francia
                 possui_statstests = True
@@ -199,34 +198,47 @@ class AvaliadorRegressaoParametrica:
             # -------------------------------------------------------------
             print("\n[1] NORMALIDADE DOS RESÍDUOS")
             
-            # Anderson-Darling (Sempre bom manter como base estrutural para N > 50)
+            # 1.1 Anderson-Darling (Sempre bom manter como base estrutural para N > 50)
             ad_stat, crit_vals, sig_levels = stats.anderson(residuos, dist='norm')
-            print(f"Estatística Anderson-Darling: {ad_stat:.3f}")
+            print(f"\nAnderson-Darling: Estatística = {ad_stat:.3f}")
             for sl, cv in zip(sig_levels, crit_vals):
                 status = "REJEITADO (Não-Normal)" if ad_stat > cv else "ACEITO (Normal)"
                 print(f"  > Nível {sl}% -> Valor Crítico = {cv:.3f} | {status}")
+
+            # 1.2 Shapiro-Wilk (Executado simultaneamente como benchmark)
+            stat_sw, p_sw = stats.shapiro(residuos)
+            status_sw = "ACEITO (Normal)" if p_sw > self.alpha else "REJEITADO (Não-Normal)"
+            print(f"\nShapiro-Wilk ($W$): Estatística = {stat_sw:.4f} | p-valor = {p_sw:.4f} -> {status_sw}")
                 
-            # O Shapiro-Francia (Padrão ouro para distribuições leptocúrticas)
+            # 1.3 Shapiro-Francia (A extração blindada)
+            # 1.3 Shapiro-Francia (A extração blindada por Chave)
             if possui_statstests:
-                # O statstests pode exigir uma Series com nome
                 residuos_serie = pd.Series(residuos, name='Residuos') if isinstance(residuos, np.ndarray) else residuos
-                resultado_sf = shapiro_francia(residuos_serie)
                 
-                # GARANTIA DE EXTRAÇÃO (Fail-safe contra mudanças de versão do Pandas/Statstests)
-                if hasattr(resultado_sf, 'values'):
-                    # Se for DataFrame ou Series, extrai para NumPy puro e achata para 1 dimensão
-                    valores = resultado_sf.values.flatten()
-                    estatistica_w, p_valor_sf = valores[0], valores[1]
-                elif isinstance(resultado_sf, dict):
-                    # Se for um dicionário
-                    valores = list(resultado_sf.values())
-                    estatistica_w, p_valor_sf = valores[0], valores[1]
+                import sys, io
+                # Bloqueia o print "poluído" nativo da biblioteca statstests para o terminal ficar limpo
+                old_stdout = sys.stdout
+                sys.stdout = io.StringIO()
+                try:
+                    resultado_sf = shapiro_francia(residuos_serie)
+                finally:
+                    sys.stdout = old_stdout
+                
+                # Extração estrita via dicionário (Padrão do pacote)
+                if isinstance(resultado_sf, dict):
+                    estatistica_w = float(resultado_sf.get('statistics W', 0.0))
+                    p_valor_sf = float(resultado_sf.get('p-value', 0.0))
+                elif isinstance(resultado_sf, pd.DataFrame):
+                    # Se em alguma atualização futura virar DataFrame
+                    col_p = [c for c in resultado_sf.columns if 'p' in str(c).lower()]
+                    col_w = [c for c in resultado_sf.columns if 'w' in str(c).lower()]
+                    estatistica_w = float(resultado_sf[col_w[0]].iloc[0])
+                    p_valor_sf = float(resultado_sf[col_p[0]].iloc[0])
                 else:
-                    # Se for uma Tupla/Lista nativa
-                    estatistica_w, p_valor_sf = resultado_sf[0], resultado_sf[1]
+                    estatistica_w, p_valor_sf = float(resultado_sf[0]), float(resultado_sf[-1]) # Pega o último para evitar o Z
                 
                 status_sf = "ACEITO (Normal)" if p_valor_sf > self.alpha else "REJEITADO (Não-Normal)"
-                print(f"\nShapiro-Francia ($W'$): Estatística = {estatistica_w:.4f} | p-valor = {p_valor_sf:.4f} -> {status_sf}")
+                print(f"Shapiro-Francia ($W'$): Estatística = {estatistica_w:.4f} | p-valor = {p_valor_sf:.4e} -> {status_sf}")
 
             # -------------------------------------------------------------
             # 2. TESTE DE HOMOCEDASTICIDADE
@@ -244,7 +256,7 @@ class AvaliadorRegressaoParametrica:
                 print(">> ALERTA ESTRUTURAL: Heterocedasticidade detectada.")
                 print(">> Justifica-se o uso de transformação Box-Cox, Log ou regressão robusta multinível.")
             print(f"{'-'*60}\n")
-
+    
     def plotar_previsao_vs_real(
         self, 
         y_true: np.ndarray, 
