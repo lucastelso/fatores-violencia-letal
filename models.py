@@ -9,6 +9,7 @@ from sklearn.model_selection import RandomizedSearchCV, learning_curve, Repeated
 from statsmodels.stats.diagnostic import het_breuschpagan
 import statsmodels.api as sm
 import seaborn as sns
+from scipy.special import inv_boxcox
 
 class AvaliadorRandomForest:
     """
@@ -339,3 +340,125 @@ class AvaliadorRegressaoParametrica:
             fig.suptitle(f'Diagnóstico Hierárquico Nível 2 (Efeitos Aleatórios)', fontsize=15, y=1.02)
             plt.tight_layout()
             plt.show()
+
+class DiagnosticadorMultinivel:
+    """
+    Extensão especializada para Modelos Hierárquicos (MixedLM).
+    Extrai e renderiza as métricas da matriz de covariância estrutural.
+    """
+
+    @staticmethod
+    def r2_nakagawa_schielzeth(modelo_ajustado: sm.regression.mixed_linear_model.MixedLMResults) -> Tuple[float, float]:
+        """
+        Calcula o R² de Nakagawa para Modelos Mistos usando os componentes de variância nativos do statsmodels.
+        Garante a separação perfeita entre efeitos fixos e variâncias hierárquicas.
+        """
+        # 1. Variância Residual Pura (Nível 1 - e)
+        var_residual = modelo_ajustado.scale
+        
+        # 2. Variância dos Efeitos Aleatórios (Nível 2 - Grupos)
+        # Extraímos do vetor de parâmetros as variâncias de grupo ('Group Var'). 
+        # Cuidado: Modelos de 'slope' aleatório (FATOR_EMPREGO Var) exigem traço da matriz, mas 
+        # para o impacto do R² Condicional padrão, somamos as variâncias não-estruturais.
+        componentes_vc = [col for col in modelo_ajustado.params.index if 'Var' in col]
+        var_aleatoria = modelo_ajustado.params[componentes_vc].sum()
+        
+        # 3. Variância dos Efeitos Fixos (Apenas X_beta, sem interceptos aleatórios)
+        # modelo_ajustado.model.exog é a matriz X. modelo_ajustado.fe_params são os betas.
+        pred_fixa = np.dot(modelo_ajustado.model.exog, modelo_ajustado.fe_params)
+        var_fixa = np.var(pred_fixa, ddof=1) # ddof=1 para estimador não-viesado da variância
+        
+        # 4. A Matemática de Nakagawa
+        var_total = var_fixa + var_aleatoria + var_residual
+        r2_marginal = var_fixa / var_total
+        r2_condicional = (var_fixa + var_aleatoria) / var_total
+        
+        return r2_marginal, r2_condicional
+
+    def renderizar_previsao_boxcox(
+        self,
+        modelo_bc_ajustado: sm.regression.mixed_linear_model.MixedLMResults,
+        df_completo: pd.DataFrame,
+        coluna_alvo: str,
+        coluna_estrato: str,
+        lambda_bc: float
+    ) -> None:
+        """
+        Realiza o de-transformation de Box-Cox e plota o diagnóstico de aderência visual,
+        enriquecido com as métricas absolutas de Nakagawa.
+        """
+        # 1. Prepara as Séries (Alinhamento Indexado Automático)
+        y_real = df_completo[coluna_alvo]
+        y_pred_boxcox = modelo_bc_ajustado.fittedvalues
+        
+        # 2. De-Transformation Segura (Voltando à taxa de homicídios bruta)
+        y_pred_revertido = inv_boxcox(y_pred_boxcox, lambda_bc)
+        # Correção do shift -1, assumino que usou-se box-cox + 1 para evitar divisão por 0
+        y_pred_revertido = y_pred_revertido - 1 
+
+        # 3. Calcula Métricas Sólidas
+        r2_marg, r2_cond = self.r2_nakagawa_schielzeth(modelo_bc_ajustado)
+
+        # 4. Configuração Arquitetural do Plot
+        fig, ax = plt.subplots(figsize=(8, 8), dpi=100)
+        sns.set_theme(style="white")
+        
+        # Limites Universais (Com respiro de 5)
+        min_val = min(y_real.min(), y_pred_revertido.min()) - 5
+        max_val = max(y_real.max(), y_pred_revertido.max()) + 5
+        limites = [min_val, max_val]
+
+        # Scatter
+        sns.scatterplot(
+            x=y_real, 
+            y=y_pred_revertido, 
+            hue=df_completo[coluna_estrato],
+            palette='Set1',
+            s=60,
+            alpha=0.85,
+            edgecolor='k',
+            linewidth=0.6,
+            ax=ax
+        )
+
+        # Reta de Ajuste (Com os dados na escala humana)
+        sns.regplot(
+            x=y_real, 
+            y=y_pred_revertido, 
+            scatter=False,
+            color='crimson',
+            line_kws={'linewidth': 2, 'linestyle': '-'},
+            label='Curva de De-Transformation'
+        )
+
+        # Previsão Perfeita Geométrica
+        ax.plot(limites, limites, color='black', linestyle='--', linewidth=1.5, label='Previsão Perfeita ($y = \\hat{y}$)')
+
+        # Identidade Visual e Textos
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('black')
+        ax.spines['bottom'].set_color('black')
+        ax.spines['left'].set_linewidth(1.2)
+        ax.spines['bottom'].set_linewidth(1.2)
+        
+        ax.set_aspect('equal', 'box')
+        ax.set_xlim(limites)
+        ax.set_ylim(limites)
+        
+        titulo_formatado = (
+            f"MODELO HIERÁRQUICO (BOX-COX $\\lambda = {lambda_bc:.3f}$)\n"
+            f"Nakagawa $R^2$ Marginal = {r2_marg:.3f} (Fatores Estruturais)\n"
+            f"Nakagawa $R^2$ Condicional = {r2_cond:.3f} (Fatores + Efeito Geográfico)"
+        )
+        
+        ax.set_title(titulo_formatado, fontsize=14, pad=15, loc='left', fontweight='bold')
+        ax.set_xlabel('Taxa de Violência Real (Mortes/100k)', fontsize=12)
+        ax.set_ylabel('Taxa Prevista Revertida', fontsize=12)
+        
+        ax.legend(frameon=False, loc='upper left')
+        if ax.get_legend() is not None:
+            sns.move_legend(ax, "upper left", bbox_to_anchor=(1.02, 1))
+
+        plt.tight_layout()
+        plt.show()
