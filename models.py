@@ -11,6 +11,8 @@ import statsmodels.api as sm
 import seaborn as sns
 from scipy.special import inv_boxcox
 
+
+
 class AvaliadorRandomForest:
     """
     Classe modular para otimização e avaliação de curvas de aprendizado 
@@ -170,49 +172,78 @@ class AvaliadorRegressaoParametrica:
         ax.set_axisbelow(True)
 
     def diagnostico_quantitativo(
-        self, 
-        residuos: np.ndarray, 
-        valores_ajustados: np.ndarray, 
-        exog: Optional[np.ndarray] = None,
-        nome_contexto: str = "Nível 1"
-    ) -> None:
-        """
-        Executa os testes formais de Normalidade (Shapiro/Anderson) e Homocedasticidade (Breusch-Pagan).
-        """
-        print(f"\n{'='*60}")
-        print(f" DIAGNÓSTICO QUANTITATIVO: {nome_contexto.upper()} ".center(60))
-        print(f"{'='*60}")
-        
-        # 1. Teste de Normalidade (Anderson-Darling é superior para N > 50)
-        print("\n[1] NORMALIDADE DOS RESÍDUOS")
-        ad_stat, crit_vals, sig_levels = stats.anderson(residuos, dist='norm')
-        print(f"Estatística Anderson-Darling: {ad_stat:.3f}")
-        
-        is_normal = True
-        for sl, cv in zip(sig_levels, crit_vals):
-            status = "REJEITADO (Não-Normal)" if ad_stat > cv else "ACEITO (Normal)"
-            if sl == (self.alpha * 100) and ad_stat > cv:
-                is_normal = False
-            print(f"  > Nível {sl}% -> Valor Crítico = {cv:.3f} | {status}")
+            self, 
+            residuos: np.ndarray, 
+            valores_ajustados: np.ndarray, 
+            exog: Optional[np.ndarray] = None,
+            nome_contexto: str = "Nível 1"
+        ) -> None:
+            """
+            Executa os testes formais de Normalidade (Anderson-Darling, Shapiro-Wilk e Shapiro-Francia) 
+            e Homocedasticidade (Breusch-Pagan).
+            """
             
-        # Opcional: Shapiro-Wilk como dupla checagem
-        stat_sw, p_sw = stats.shapiro(residuos)
-        print(f"Shapiro-Wilk: p-valor = {p_sw:.4f} -> {'Normal' if p_sw > self.alpha else 'Não-Normal'}")
+            # A importação direta da biblioteca econométrica
+            try:
+                from statstests.tests import shapiro_francia
+                possui_statstests = True
+            except ImportError:
+                possui_statstests = False
+                
+            print(f"\n{'='*60}")
+            print(f" DIAGNÓSTICO QUANTITATIVO: {nome_contexto.upper()} ".center(60))
+            print(f"{'='*60}")
+            
+            # -------------------------------------------------------------
+            # 1. TESTES DE NORMALIDADE
+            # -------------------------------------------------------------
+            print("\n[1] NORMALIDADE DOS RESÍDUOS")
+            
+            # Anderson-Darling (Sempre bom manter como base estrutural para N > 50)
+            ad_stat, crit_vals, sig_levels = stats.anderson(residuos, dist='norm')
+            print(f"Estatística Anderson-Darling: {ad_stat:.3f}")
+            for sl, cv in zip(sig_levels, crit_vals):
+                status = "REJEITADO (Não-Normal)" if ad_stat > cv else "ACEITO (Normal)"
+                print(f"  > Nível {sl}% -> Valor Crítico = {cv:.3f} | {status}")
+                
+            # O Shapiro-Francia (Padrão ouro para distribuições leptocúrticas)
+            if possui_statstests:
+                # O statstests pode exigir uma Series com nome
+                residuos_serie = pd.Series(residuos, name='Residuos') if isinstance(residuos, np.ndarray) else residuos
+                resultado_sf = shapiro_francia(residuos_serie)
+                
+                # GARANTIA DE EXTRAÇÃO (Fail-safe contra mudanças de versão do Pandas/Statstests)
+                if hasattr(resultado_sf, 'values'):
+                    # Se for DataFrame ou Series, extrai para NumPy puro e achata para 1 dimensão
+                    valores = resultado_sf.values.flatten()
+                    estatistica_w, p_valor_sf = valores[0], valores[1]
+                elif isinstance(resultado_sf, dict):
+                    # Se for um dicionário
+                    valores = list(resultado_sf.values())
+                    estatistica_w, p_valor_sf = valores[0], valores[1]
+                else:
+                    # Se for uma Tupla/Lista nativa
+                    estatistica_w, p_valor_sf = resultado_sf[0], resultado_sf[1]
+                
+                status_sf = "ACEITO (Normal)" if p_valor_sf > self.alpha else "REJEITADO (Não-Normal)"
+                print(f"\nShapiro-Francia ($W'$): Estatística = {estatistica_w:.4f} | p-valor = {p_valor_sf:.4f} -> {status_sf}")
 
-        # 2. Teste de Homocedasticidade (Breusch-Pagan)
-        print("\n[2] HOMOCEDASTICIDADE (Breusch-Pagan)")
-        # Se exog não for fornecido, criamos um proxy usando fitted_values e constante
-        matriz_exog = exog if exog is not None else sm.add_constant(valores_ajustados)
-        
-        bp_test = het_breuschpagan(residuos, matriz_exog)
-        lm_stat, p_lm = bp_test[0], bp_test[1]
-        
-        print(f"Estatística LM: {lm_stat:.3f} | p-valor: {p_lm:.4f}")
-        if p_lm > self.alpha:
-            print(">> Conclusão: Resíduos Homocedásticos (Variância Constante).")
-        else:
-            print(">> ALERTA: Resíduos Heterocedásticos. Considere matriz de covariância robusta (ex: HC3) ou Box-Cox.")
-        print(f"{'-'*60}\n")
+            # -------------------------------------------------------------
+            # 2. TESTE DE HOMOCEDASTICIDADE
+            # -------------------------------------------------------------
+            print("\n[2] HOMOCEDASTICIDADE (Breusch-Pagan)")
+            matriz_exog = exog if exog is not None else sm.add_constant(valores_ajustados)
+            
+            bp_test = het_breuschpagan(residuos, matriz_exog)
+            lm_stat, p_lm = bp_test[0], bp_test[1]
+            
+            print(f"Estatística LM: {lm_stat:.3f} | p-valor: {p_lm:.4f}")
+            if p_lm > self.alpha:
+                print(">> Conclusão: Resíduos Homocedásticos (A variância é constante).")
+            else:
+                print(">> ALERTA ESTRUTURAL: Heterocedasticidade detectada.")
+                print(">> Justifica-se o uso de transformação Box-Cox, Log ou regressão robusta multinível.")
+            print(f"{'-'*60}\n")
 
     def plotar_previsao_vs_real(
         self, 
