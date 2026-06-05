@@ -505,3 +505,104 @@ class DiagnosticadorMultinivel:
 
         plt.tight_layout()
         plt.show()
+    
+    def diagnostico_efeitos_aleatorios_blups(
+        self, 
+        modelo_ajustado: sm.regression.mixed_linear_model.MixedLMResults,
+        alpha: float = 0.05
+    ) -> None:
+        """
+        Extrai, testa (Normalidade) e renderiza (Barplot Ordenado) os Efeitos Aleatórios (BLUPs) de Nível 2.
+        Suporta múltiplos efeitos simultâneos (Interceptos e Random Slopes).
+        """
+        import scipy.stats as stats
+        import pandas as pd
+        try:
+            from statstests.tests import shapiro_francia
+            possui_statstests = True
+        except ImportError:
+            possui_statstests = False
+
+        # Extração Dinâmica (Sem hardcoding de colunas)
+        # O orient='index' mapeia os grupos (ex: UFs) como índice
+        df_blups = pd.DataFrame.from_dict(modelo_ajustado.random_effects, orient='index')
+        
+        print("\n" + "="*60)
+        print(" DIAGNÓSTICO DE NÍVEL 2: EFEITOS ALEATÓRIOS (BLUPs) ".center(60))
+        print("="*60)
+
+        for coluna in df_blups.columns:
+            valores_blup = df_blups[coluna].to_numpy()
+            
+            print(f"\n--- Analisando Efeito: [{coluna}] ---")
+            
+            # 1. TESTES QUANTITATIVOS DE NORMALIDADE
+            # Anderson-Darling
+            ad_stat, crit_vals, sig_levels = stats.anderson(valores_blup, dist='norm')
+            ad_passou = ad_stat < crit_vals[2] # Posição 2 equivale a alpha 0.05
+            print(f"Anderson-Darling : Estatística = {ad_stat:.3f} | Normal? {'SIM' if ad_passou else 'NÃO'}")
+            
+            # Shapiro-Wilk
+            stat_sw, p_sw = stats.shapiro(valores_blup)
+            print(f"Shapiro-Wilk (W) : p-valor = {p_sw:.4e} | Normal? {'SIM' if p_sw > alpha else 'NÃO'}")
+            
+            # Shapiro-Francia
+            if possui_statstests:
+                residuos_serie = pd.Series(valores_blup, name=coluna)
+                import sys, io
+                old_stdout = sys.stdout
+                sys.stdout = io.StringIO()
+                try:
+                    resultado_sf = shapiro_francia(residuos_serie)
+                finally:
+                    sys.stdout = old_stdout
+                
+                if isinstance(resultado_sf, dict):
+                    p_sf = float(resultado_sf.get('p-value', 0.0))
+                else:
+                    p_sf = float(resultado_sf[-1])
+                print(f"Shapiro-Francia(W'): p-valor = {p_sf:.4e} | Normal? {'SIM' if p_sf > alpha else 'NÃO'}")
+
+            # 2. RENDERIZAÇÃO DE IMPACTO (Barplot Ordenado)
+            # Ordenação do maior para o menor impacto
+            df_plot = df_blups[[coluna]].sort_values(by=coluna, ascending=False).reset_index()
+            df_plot.columns = ['Grupo', 'Efeito']
+            
+            fig, ax = plt.subplots(figsize=(15, 6), dpi=100)
+            
+            # Engenharia de Cores: Vermelho para impacto positivo (aumenta violência/inclinação), Azul para negativo
+            cores = ['crimson' if val > 0 else 'steelblue' for val in df_plot['Efeito']]
+            
+            sns.barplot(data=df_plot, x='Grupo', y='Efeito', palette=cores, ax=ax)
+            
+            # Rótulos nas barras com inteligência espacial
+            for container in ax.containers:
+                ax.bar_label(
+                    container, 
+                    fmt="%.3f", 
+                    padding=4, 
+                    fontsize=10, 
+                    color='black',
+                    fontweight='500'
+                )
+
+            # Estilização Corporativa
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_color('black')
+            ax.spines['bottom'].set_color('black')
+            ax.spines['left'].set_linewidth(1.2)
+            ax.spines['bottom'].set_linewidth(1.2)
+            
+            # A Linha de Base (A média global)
+            ax.axhline(0, color='black', linewidth=1.5)
+            
+            ax.grid(True, axis='y', linestyle='--', alpha=0.5)
+            ax.set_axisbelow(True)
+            
+            ax.set_title(f'Magnitude Espacial: {coluna} (BLUPs Nível 2)', fontsize=16, fontweight='bold', pad=15)
+            ax.set_xlabel('Unidade Federativa (Estado)', fontsize=12)
+            ax.set_ylabel('Desvio da Média Global', fontsize=12)
+            
+            plt.tight_layout()
+            plt.show()
