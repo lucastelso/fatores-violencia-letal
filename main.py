@@ -34,3 +34,22 @@ Orquestra todo o pipeline do projeto
 
 
 """
+import pandas as pd
+from utilitarios.outros_utils import CustomFormatter
+logger = CustomFormatter.get_logger("PIPELINE")
+
+logger.info('INICIANDO PIPELINE!')
+
+path_dados = r"dados_brutos/fatores_pca.parquet"
+
+fatores = pd.read_parquet(path=path_dados)
+
+logger.info(f"Lendo dados: {path_dados}")
+
+
+logger.info("Dados encontrados com sucesso!")
+logger.warn("VERIFIQUE A INTEGRIDADE DOS DADOS:")
+
+print(fatores.sample(10))
+
+
