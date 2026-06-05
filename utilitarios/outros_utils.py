@@ -4,7 +4,6 @@ from pathlib import Path
 import logging
 import sys
 
-
 modelos = Literal[
     'modelo_rf_683.pkl', 'melhor_rf.pkl'
     ]
@@ -23,7 +22,6 @@ def carregar_modelo(
         found_model = pickle.load(file)
     
     return found_model
-
 
 class CustomFormatter(logging.Formatter):
     """Logger"""
@@ -50,21 +48,18 @@ class CustomFormatter(logging.Formatter):
         formatter = logging.Formatter(log_fmt, datefmt="%Y-%m-%d %H:%M:%S")
         return formatter.format(record)
 
-def get_logger(name: str = __name__) -> logging.Logger:
-    """Retorna um logger customizado e configurado para o terminal."""
-    logger = logging.getLogger(name)
-    
-    if not logger.handlers:
-        logger.setLevel(logging.DEBUG)
-
-        # Configura o output para o stdout (terminal)
-        stdout_handler = logging.StreamHandler(sys.stdout)
-        stdout_handler.setLevel(logging.DEBUG)
-        stdout_handler.setFormatter(CustomFormatter())
+    def get_logger(name: str = __name__) -> logging.Logger:
+        """Retorna um logger customizado e configurado para o terminal."""
+        logger = logging.getLogger(name)
         
-        logger.addHandler(stdout_handler)
-        
-    return logger
+        if not logger.handlers:
+            logger.setLevel(logging.DEBUG)
 
-# Instancia o logger principal
-logger = get_logger("APP")
+            # Configura o output para o stdout (terminal)
+            stdout_handler = logging.StreamHandler(sys.stdout)
+            stdout_handler.setLevel(logging.DEBUG)
+            stdout_handler.setFormatter(CustomFormatter())
+            
+            logger.addHandler(stdout_handler)
+            
+        return logger
