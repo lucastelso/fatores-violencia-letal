@@ -1,3 +1,12 @@
+"""
+ADICIONAR:
+    1. Visualizar dados brutos;
+    2. Transformar dados brutos em fatores;
+    3. Visualizar fatores
+    4. Modelos paramétricos
+    5. Modelo não-paramétrico
+    
+"""
 import pandas as pd
 from utilitarios.outros_utils import CustomFormatter
 from models import AvaliadorRegressaoParametrica, DiagnosticadorMultinivel
