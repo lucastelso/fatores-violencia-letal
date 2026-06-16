@@ -154,3 +154,27 @@ avaliador_param.plotar_painel_residuos(
     y_predito_ols, 
     titulo="Regressão Linear Múltipla com Transformações de Box-Cox"
     )
+
+#%% 4. REGRESSÃO LINEAR MÚLTIPLA MULTINÍVEL COM TRANSFORMAÇÕES DE BOX-COX
+
+diag_hlm = DiagnosticadorMultinivel()
+diag_hlm.renderizar_previsao_boxcox(
+    modelo_bc_ajustado=resultado_bc_2niveis,
+    df_completo=df_PCA,
+    coluna_alvo='TAXA_VIOLENCIA',
+    coluna_estrato='REGIAO',
+    lambda_bc=lambda_bc
+    )
+
+#%% Segunda parte da RLMM-BC
+
+y_predito_bc = resultado_bc_2niveis.fittedvalues.to_numpy()
+residuos_bc = resultado_bc_2niveis.resid.to_numpy()
+avaliador_param.diagnostico_quantitativo(residuos_bc, y_predito_bc, nome_contexto="Modelo Hierárquico (Nível 1)")
+avaliador_param.plotar_painel_residuos(residuos_bc, y_predito_bc, titulo="Multinível Box-Cox (Nível 1)")
+# avaliador_param.plotar_efeitos_aleatorios_multinivel(resultado_bc_2niveis.random_effects)
+diag_hlm.diagnostico_efeitos_aleatorios_blups(modelo_ajustado=resultado_bc_2niveis, alpha=0.05)
+
+#%% Resultados do RLMM-BC
+
+print(resultado_bc_2niveis.summary())
