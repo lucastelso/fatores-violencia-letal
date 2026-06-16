@@ -4,6 +4,14 @@ from pathlib import Path
 import logging
 import sys
 
+PATH_DADOS = "dados_brutos"
+
+def criar_path(
+        tabela: str,
+        base: str = "dados_brutos",
+        ) -> Path:
+    return Path(fr"{base}/{tabela}")
+
 modelos = Literal[
     'modelo_rf_683.pkl', 'melhor_rf.pkl'
     ]
