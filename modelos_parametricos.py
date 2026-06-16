@@ -76,10 +76,81 @@ residuos_ols = rlm.resid.to_numpy()
 exog_ols = rlm.model.exog # Matriz de variáveis independentes original
 
 
-avaliador_param.diagnostico_quantitativo(residuos_ols, y_predito_ols, exog=exog_ols, nome_contexto="Regressão Linear Múltipla")
-avaliador_param.plotar_previsao_vs_real(y_real, y_predito_ols, hue_labels=df_PCA_parametrico['REGIAO'])
-avaliador_param.plotar_painel_residuos(residuos_ols, y_predito_ols, titulo="OLS Padrão")
+avaliador_param.diagnostico_quantitativo(
+    residuos_ols, 
+    y_predito_ols, 
+    exog=exog_ols, 
+    nome_contexto="Regressão Linear Múltipla"
+    )
+
+avaliador_param.plotar_previsao_vs_real(
+    y_real, 
+    y_predito_ols, 
+    hue_labels=df_PCA_parametrico['REGIAO']
+    )
+
+avaliador_param.plotar_painel_residuos(
+    residuos_ols, 
+    y_predito_ols, 
+    titulo="OLS Padrão"
+    )
 
 print(rlm.summary())
 
-#%% 2. REGRESSÃO LINEAR MÚLTIPLA COM TRANSFORMAÇÃO LOGARÍTIMA DA VARIÁVEL DEPENDENTE
+
+#%% 2. REGRESSÃO LINEAR MÚLTIPLA COM TRANSFORMAÇÃO LOGARÍTIMA
+
+y_real = df_PCA_parametrico_log1['TAXA_VIOLENCIA'].to_numpy()
+y_predito_ols = log_rlm.fittedvalues.to_numpy()
+residuos_ols = log_rlm.resid.to_numpy()
+exog_ols = log_rlm.model.exog # Matriz de variáveis independentes original
+
+
+avaliador_param.diagnostico_quantitativo(
+    residuos_ols, 
+    y_predito_ols, 
+    exog=exog_ols, 
+    nome_contexto="Regressão Linear Múltipla com transformação logaritimica"
+    )
+
+avaliador_param.plotar_previsao_vs_real(
+    y_real, 
+    y_predito_ols, 
+    hue_labels=df_PCA_parametrico_log1['REGIAO'], 
+    titulo='Regressão Linear Múltipla com Transformação Logaritimica'
+    )
+
+avaliador_param.plotar_painel_residuos(
+    residuos_ols, 
+    y_predito_ols, 
+    titulo="Regressão Linear Múltipla com Transformação Logaritimica"
+    )
+
+
+#%% 3.REGRESSÃO LINEAR MÚLTIPLA COM TRANSFORMAÇÕES DE BOX-COX
+
+y_real = df_PCA_parametrico_box['TAXA_VIOLENCIA'].to_numpy()
+y_predito_ols = rlm_bc.fittedvalues.to_numpy()
+residuos_ols = rlm_bc.resid.to_numpy()
+exog_ols = rlm_bc.model.exog # Matriz de variáveis independentes original
+
+
+avaliador_param.diagnostico_quantitativo(
+    residuos_ols, 
+    y_predito_ols, 
+    exog=exog_ols, 
+    nome_contexto="Regressão Linear Múltipla com transformação logaritimica"
+    )
+
+avaliador_param.plotar_previsao_vs_real(
+    y_real, 
+    y_predito_ols, 
+    hue_labels=df_PCA_parametrico_box['REGIAO'], 
+    titulo='Regressão Linear Múltipla com Transformações de Box-Cox'
+    )
+
+avaliador_param.plotar_painel_residuos(
+    residuos_ols, 
+    y_predito_ols, 
+    titulo="Regressão Linear Múltipla com Transformações de Box-Cox"
+    )
